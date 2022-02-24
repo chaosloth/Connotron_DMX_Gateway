@@ -5,12 +5,38 @@ This project allows for receiving ArtNet messages via WIFI and transmitting ANSI
 
 ## Contents
 
+- [Overview](#overview)
+  - [Flow](#flow)
+  - [Stack](#stack)
+  - [Prototype](#prototype)
 - [Library Installation](#library-installation)
   - [ArtNet](#artnet)
   - [ESP DMX](#esp-dmx)
   - [WIFI Manager](#wifi-manager)
 - [Hardware](#hardware)
   - [UART Pins](#uart-pins)
+
+
+## Overview
+
+### Stack
+Building on the ESP Core, this project can accept physical DMX connections (RJ45, XLR) along with connecting to WIFI to accept ArtNet messagse. Whilst it is possible to accept ArtNet broadcast messages, the reality of WIFI connections is that many packets are lost, hence it is recommended that UNICAST be configured for the upstream ArtNet controller.
+
+
+![Stack](Connotron_DMX_Gateway_Stack.png "Stack")
+
+### Flow
+
+All incoming DMX messages are forwarded by default to the DMX Out port unless ArtNet messaging is being received, in which case Incoming DMX messages are dropped and the configured ArtNet universe messages are sent via the DMX Out port. The Gateway is configured to forward exactly one ArtNet universe to the DMX Output port. A Universe ID is configured as part of the WIFI setup, by default Universe 1 is configured.
+
+![Flow](Connotron_DMX_Gateway_Flow.png "Flow")
+
+
+### Prototype
+
+The proto board uses off the shelf modules to enable RS485 (DMX) communication between devices, though you can use the MAX485 chip directly
+
+![Proto Board](ProtoBoard.png "Proto")
 
 ## Library Installation
 
@@ -59,5 +85,14 @@ Use the esp_dmx function call to change the UART GPIO pins to non-standard pinou
 esp_err_t dmx_set_pin(dmx_port_t dmx_num, int tx_io_num, int rx_io_num, int rts_io_num)
 ```
 
+Example:
+```
+dmx_port_t dmxPort = 2;
+int transmitPin = 17;
+int receivePin = 16;
+int enablePin = 21;
+
+dmx_set_pin(dmxPort, transmitPin, receivePin, enablePin);
+```
 
 
