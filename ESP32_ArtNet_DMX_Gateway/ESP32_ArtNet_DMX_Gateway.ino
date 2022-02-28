@@ -73,7 +73,7 @@ int dmxOutReceivePin = 16;
 int dmxOutEnablePin = 4;
 
 int dmxInTransmitPin = 19;
-int dmxInReceivePin = 18;
+int dmxInReceivePin = 18; 
 int dmxInEnablePin = 21;
 
 /* Next, lets decide which DMX ports to use. The ESP32 has either 2 or 3 UART ports.

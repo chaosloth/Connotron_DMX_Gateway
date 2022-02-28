@@ -8,7 +8,8 @@ This project allows for receiving ArtNet messages via WIFI and transmitting ANSI
 - [Overview](#overview)
   - [Flow](#flow)
   - [Stack](#stack)
-  - [Prototype](#prototype)
+  - [Prototype 1](#prototype-1)
+  - [Prototype 2](#prototype-2)
 - [Library Installation](#library-installation)
   - [ArtNet](#artnet)
   - [ESP DMX](#esp-dmx)
@@ -32,11 +33,24 @@ All incoming DMX messages are forwarded by default to the DMX Out port unless Ar
 ![Flow](Connotron_DMX_Gateway_Flow.png "Flow")
 
 
-### Prototype
+### Prototype 1
 
 The proto board uses off the shelf modules to enable RS485 (DMX) communication between devices, though you can use the MAX485 chip directly
 
 ![Proto Board](ProtoBoard.png "Proto")
+
+### Prototype 2
+
+A second version of the board created use EasyEDA
+
+![Schematic](Schematic.svg "Schematic")
+
+![3D Render](ProtoBoard2_3D.png "3D Render")
+
+![Silkscreen](ProtoBoard2.png "Silkscreen")
+
+![Render](Render.png "Render")
+
 
 ## Library Installation
 
@@ -68,12 +82,28 @@ RS485 to TTL UART is performed by the MAX485 (or similar) IC. Wired as follows. 
 
 Note that if this is setup to transmit DMX messages only, then RE, DE can simply be pulled low to GND
 
-| Function			| ESP PIN       | MAX PIN 	|
-| ----------------- |:-------------:| ---------:|
-| Transmit			| 17			| DI 		|
-| Transmit Enable	| 21			| RE 		|
-| Receive Enable	| 21			| DE 		|
-| Receive			| 16			| RO 		|
+#### DMX Port - Output
+
+Note receive is not connected in this case
+
+| Function			  | ESP PIN       | MAX PIN 	|
+| --------------- |:-------------:| ---------:|
+| Transmit			  | 17			      | DI 		    |
+| Transmit Enable	| 4 			      | RE 	     	|
+| Receive Enable	| 4 			      | DE 	    	|
+| Receive			    | NC (16)	      | RO 	     	|
+
+#### DMX Port - Input
+
+Note transmit is not connected in this case
+
+| Function        | ESP PIN       | MAX PIN   |
+| --------------- |:-------------:| ---------:|
+| Transmit        | NC (19)       | DI        |
+| Transmit Enable | 21            | RE        |
+| Receive Enable  | 21            | DE        |
+| Receive         | 18            | RO        |
+
 
 ![Schematic](MAX485_Schematic.png "MAX485")
 
