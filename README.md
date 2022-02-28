@@ -8,8 +8,10 @@ This project allows for receiving ArtNet messages via WIFI and transmitting ANSI
 - [Overview](#overview)
   - [Flow](#flow)
   - [Stack](#stack)
-  - [Prototype 1](#prototype-1)
-  - [Prototype 2](#prototype-2)
+- [Prototype 1](#prototype-1)
+- [Prototype 2](#prototype-2)
+  - [Schematic](#schematic)
+  - [Enclosure](#enclosure)
 - [Library Installation](#library-installation)
   - [ArtNet](#artnet)
   - [ESP DMX](#esp-dmx)
@@ -33,21 +35,27 @@ All incoming DMX messages are forwarded by default to the DMX Out port unless Ar
 ![Flow](Connotron_DMX_Gateway_Flow.png "Flow")
 
 
-### Prototype 1
+## Prototype 1
 
 The proto board uses off the shelf modules to enable RS485 (DMX) communication between devices, though you can use the MAX485 chip directly
 
 ![Proto Board](ProtoBoard.png "Proto")
 
-### Prototype 2
+## Prototype 2
 
-A second version of the board created use EasyEDA
+A second version of the board created use EasyEDA and Fusion 360
+
+### Schematic
 
 ![Schematic](Schematic.svg "Schematic")
 
 ![3D Render](ProtoBoard2_3D.png "3D Render")
 
 ![Silkscreen](ProtoBoard2.png "Silkscreen")
+
+### Enclosure
+
+![Enclosure](Enclosure.png "Enclosure")
 
 ![Render](Render.png "Render")
 
