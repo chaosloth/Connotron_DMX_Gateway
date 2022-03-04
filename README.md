@@ -33,8 +33,6 @@ Click the link below to see it in action
 ### Stack
 Building on the ESP Core, this project can accept physical DMX connections (RJ45, XLR) along with connecting to WIFI to accept ArtNet messagse. Whilst it is possible to accept ArtNet broadcast messages, the reality of WIFI connections is that many packets are lost, hence it is recommended that UNICAST be configured for the upstream ArtNet controller.
 
-![Render](Render.png "Render")
-
 ![Stack](Connotron_DMX_Gateway_Stack.png "Stack")
 
 ### Flow
@@ -70,6 +68,7 @@ A second version of the board created use EasyEDA and Fusion 360
 
 ![Enclosure](Enclosure.png "Enclosure")
 
+![Render](Render.png "Render")
 
 ## Library Installation
 
