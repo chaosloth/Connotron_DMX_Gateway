@@ -3,6 +3,11 @@
 This project allows for receiving ArtNet messages via WIFI and transmitting ANSI-ESTA E1.11 DMX-512A using an Espressif ESP32. It is based on two libraries for ArtNet and DMX messaging which individually have a ton of configurability. By default this project will open up a WIFI configuration portal after a _double reset_ where the WIFI credentials and ArtNet Universe may be configured. The output circuitry has been texted with [MAX485 TTL UART to RS485](https://core-electronics.com.au/ttl-uart-to-rs485-converter-module.html) module along with MAX485 chips directly. 
 
 
+Click the link below to see it in action
+
+[![See it in action](infinite.png)](infinite.mp4 "Studio")
+
+
 ## Contents
 
 - [Overview](#overview)
@@ -11,6 +16,8 @@ This project allows for receiving ArtNet messages via WIFI and transmitting ANSI
 - [Prototype 1](#prototype-1)
 - [Prototype 2](#prototype-2)
   - [Schematic](#schematic)
+  - [PCB Layout](#pcb-layout)
+  - [PCB Render](#pcb-render)
   - [Enclosure](#enclosure)
 - [Library Installation](#library-installation)
   - [ArtNet](#artnet)
@@ -22,9 +29,11 @@ This project allows for receiving ArtNet messages via WIFI and transmitting ANSI
 
 ## Overview
 
+
 ### Stack
 Building on the ESP Core, this project can accept physical DMX connections (RJ45, XLR) along with connecting to WIFI to accept ArtNet messagse. Whilst it is possible to accept ArtNet broadcast messages, the reality of WIFI connections is that many packets are lost, hence it is recommended that UNICAST be configured for the upstream ArtNet controller.
 
+![Render](Render.png "Render")
 
 ![Stack](Connotron_DMX_Gateway_Stack.png "Stack")
 
@@ -49,15 +58,17 @@ A second version of the board created use EasyEDA and Fusion 360
 
 ![Schematic](Schematic.svg "Schematic")
 
-![3D Render](ProtoBoard2_3D.png "3D Render")
+### PCB Layout
 
 ![Silkscreen](ProtoBoard2.png "Silkscreen")
+
+### PCB Render
+
+![3D Render](ProtoBoard2_3D.png "3D Render")
 
 ### Enclosure
 
 ![Enclosure](Enclosure.png "Enclosure")
-
-![Render](Render.png "Render")
 
 
 ## Library Installation
