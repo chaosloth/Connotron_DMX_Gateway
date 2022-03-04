@@ -42,15 +42,21 @@ All incoming DMX messages are forwarded by default to the DMX Out port unless Ar
 ![Flow](Connotron_DMX_Gateway_Flow.png "Flow")
 
 
+## Prototype 0
+
+The proto board uses off the shelf modules hand soldered with perfboard
+
+![Proto Board](ProtoBoard0.png "Proto")
+
 ## Prototype 1
 
-The proto board uses off the shelf modules to enable RS485 (DMX) communication between devices, though you can use the MAX485 chip directly
+The proto board uses off the shelf modules to enable RS485 (DMX) communication between devices, though you can use the MAX485 chip directly. Basic board outline via EasyEDA.
 
-![Proto Board](ProtoBoard.png "Proto")
+![Proto Board](ProtoBoard1.png "Proto")
 
 ## Prototype 2
 
-A second version of the board created use EasyEDA and Fusion 360
+A second version of the board created use EasyEDA and Fusion 360 for custom board and case design
 
 ### Schematic
 
