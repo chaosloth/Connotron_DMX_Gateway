@@ -26,40 +26,49 @@
   along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define DEVICE_NAME               "ConnoDMX"
-#define OTA_PASSWORD              "infinite"
-#define WIFI_PASSWORD             "infinite"
-#define USE_SPIFFS                true
-#define ESP_DRD_USE_EEPROM        true
-#define USE_ESP_WIFIMANAGER_NTP   false
-#define DRD_TIMEOUT               10
-#define DRD_ADDRESS               0
-#define LED_BUILTIN               2
-#define DMX_RX_TIMEOUT            20   // Instead of DMX_RX_PACKET_TOUT_TICK
-#define ART_NET_TIMEOUT_MS        5000
-
+#define DEVICE_NAME               "ConnoDMX"    // Prefix of access point for inital config
+#define WIFI_PASSWORD             "infinite"    // Password for built-in AP during config mode
+#define WIFICHECK_INTERVAL        10000L        // How often to check WIFI connection
+#define OTA_PASSWORD              "infinite"    // Password for OTA firmware updates
+#define BUTTONCHECK_INTERVAL      10000L        // How oftent to check for button press
+#define USE_SPIFFS                true          // Use SPIFFS for WIFI Manager data storage
+#define USE_ESP_WIFIMANAGER_NTP   false         // Recommended to be false for mobile clients
+#define LED_BUILTIN               2             // Status LED to use
+#define DMX_RX_TIMEOUT            50            // Instead of DMX_RX_PACKET_TOUT_TICK
+#define ART_NET_TIMEOUT_MS        5000          // Time in ms to wait for ArtNet packet before declaring disconnect
+#define CONFIG_WIFI_PIN           0             // Use built in button on ESP-Dev
+#define NUM_WIFI_CREDENTIALS      1             // Number of APs to store creds for
 
 #include "ArtnetWifi.h"
 #include <esp_dmx.h>
 #include <Arduino.h>
 #include <ArduinoOTA.h>
 #include <ESPAsync_WiFiManager.h>
-#include <ESP_DoubleResetDetector.h>
+#include <WiFiMulti.h>
+
+// Use wifiMulti
+WiFiMulti wifiMulti;
 
 // Wifi configuration portal settings
 String ssid = "ConnoDMX_" + String(ESP_getChipId(), HEX);   // Suffix AP name with Chip ID
 String password = "";   // No password
 
-DoubleResetDetector* drd;
+// Status LED, blinks when all is groovy
+boolean ledState = false;
 const int PIN_LED       = 2;
+
+// WIFI Manager
 bool      initialConfig = false;
 AsyncWebServer webServer(80);
 #if !( USING_ESP32_S2 || USING_ESP32_C3 )
 DNSServer dnsServer;
 #endif
 
-// Status LED, blinks when all is groovy
-boolean ledState = false;
+#if ( USING_ESP32_S2 || USING_ESP32_C3 )
+ESPAsync_WiFiManager ESPAsync_wifiManager(&webServer, NULL, DEVICE_NAME);
+#else
+ESPAsync_WiFiManager ESPAsync_wifiManager(&webServer, &dnsServer, DEVICE_NAME);
+#endif
 
 WiFiUDP UdpSend;
 ArtnetWifi artnet;
@@ -73,7 +82,7 @@ int dmxOutReceivePin = 16;
 int dmxOutEnablePin = 4;
 
 int dmxInTransmitPin = 19;
-int dmxInReceivePin = 18; 
+int dmxInReceivePin = 18;
 int dmxInEnablePin = 21;
 
 /* Next, lets decide which DMX ports to use. The ESP32 has either 2 or 3 UART ports.
@@ -112,26 +121,87 @@ unsigned int lastArtNetPacket = 0;
 
 
 #define UniverseLabel         "ArtNet Universe"
-int myUniverse = 1;
+int myUniverse = 0;
 ESPAsync_WMParameter p_UniverseID(UniverseLabel, "ArtNet Universe", "1", 1);
 
+/* This variable stores the init status of OTA. Initially false and set to true
+  by the initWIFI function after WIFI Configuration Portal has been run */
+bool initOtaComplete = false;
+
+/* Variables to store the current status checks for WIFI and button presses */
+//static ulong checkstatus_timeout  = 0;
+static ulong checkbutton_timeout  = 0;
+static ulong checkwifi_timeout    = 0;
 
 void setup()
 {
   pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(CONFIG_WIFI_PIN, INPUT);
   // set-up serial for debug output
   Serial.begin(115200); while (!Serial); delay(200);
   Serial.print("\nStarting ConnoDMX Gateway on " + String(ARDUINO_BOARD) + " WIFI Manager: ");
   Serial.println(ESP_ASYNC_WIFIMANAGER_VERSION);
 
-  initWifi();     // Setup WIFI
-  initOTA();      // Setup OTA
-  initDMXIn();    // Setup DMX port to use UART1
-  initDMXOut();   // Setup DMX port to use UART2
-  initArtNet();   // Setup ART NET
+  initDMXIn();                // Setup DMX port to use UART1
+  initDMXOut();               // Setup DMX port to use UART2
+  initArtNet();               // Setup ART NET
+  initWifiManager();          // Setup WIFI Manager
+  connectOrConfigureWifi();   // Connect to WIFI
 }
 
+void initArtNet() {
+  // This will be called for each packet received
+  artnet.setArtDmxCallback(onArtNetFrame);
+  artnet.begin();
+}
+
+void connectOrConfigureWifi() {
+  if (initialConfig) {
+    Serial.println(F("Inital Config mode. Starting Portal"));
+    digitalWrite(PIN_LED, HIGH);
+
+    if (!ESPAsync_wifiManager.startConfigPortal(ssid.c_str(), WIFI_PASSWORD)) {
+      Serial.println(F("Not connected to WiFi"));
+    } else {
+      Serial.println(F("Wifi connected"));
+      String Router_SSID = ESPAsync_wifiManager.WiFi_SSID();
+      String Router_Pass = ESPAsync_wifiManager.WiFi_Pass();
+      Serial.println("ESP Self-Stored: SSID = " + Router_SSID + ", Pass = " + Router_Pass);
+      wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
+    }
+
+    /* Get ArtNet Universe ID from the WIFI manager. This is set during
+      initial configuration and is retained in EEPROM by the WIFI Manager,
+      if for some reason it isn't set it will default to Universe 0
+    */
+    Serial.printf("Configured Universe ID: %d \n", atoi(p_UniverseID.getValue()));
+    myUniverse = atoi(p_UniverseID.getValue());
+
+    initialConfig = false;
+    digitalWrite(PIN_LED, LOW);
+
+  } else {
+    Serial.println(F("Normal mode. Entering WIFI_STA mode"));
+    WiFi.mode(WIFI_STA);
+    WiFi.begin();
+  }
+
+  unsigned long startedAt = millis();
+
+  Serial.println(F("After waiting to connect waited for"));
+
+  int connRes = WiFi.waitForConnectResult();
+  float waited = (millis() - startedAt);
+
+  Serial.print(waited / 1000); Serial.print(F(" secs , Connection result is "));
+  Serial.println(connRes);
+}
+
+
 void initOTA() {
+  // Exit if already init
+  if (initOtaComplete) return;
+
   // Hostname defaults to esp3232-[MAC]
   ArduinoOTA.setHostname(ssid.c_str());
 
@@ -166,64 +236,17 @@ void initOTA() {
 
   ArduinoOTA.begin();
   Serial.println("OTA Ready");
+
+  initOtaComplete = true;
 }
 
-
-// connect to wifi – returns true if successful or false if not
-void initWifi(void)
+void initWifiManager(void)
 {
-  drd = new DoubleResetDetector(DRD_TIMEOUT, DRD_ADDRESS);
-  if (drd->detectDoubleReset()) {
-    Serial.println(F("Double Reset Detected"));
-    initialConfig = true;
-  }
-#if ( USING_ESP32_S2 || USING_ESP32_C3 )
-  ESPAsync_WiFiManager ESPAsync_wifiManager(&webServer, NULL, DEVICE_NAME);
-#else
-  ESPAsync_WiFiManager ESPAsync_wifiManager(&webServer, &dnsServer, DEVICE_NAME);
-#endif
-  if (ESPAsync_wifiManager.WiFi_SSID() == "") {
-    Serial.println(F("No AP credentials"));
-    initialConfig = true;
-  }
+  // Set timeout on configuration portal
+  ESPAsync_wifiManager.setConfigPortalTimeout(30);
 
   // Add custom configurable ArtNet Universe Number
   ESPAsync_wifiManager.addParameter(&p_UniverseID);
-
-  if (initialConfig) {
-    Serial.println(F("Starting Config Portal")); digitalWrite(PIN_LED, HIGH);
-    if (!ESPAsync_wifiManager.startConfigPortal(ssid.c_str(), WIFI_PASSWORD)) {
-      Serial.println(F("Not connected to WiFi"));
-    }
-    else {
-      Serial.println(F("connected"));
-    }
-  }
-  else {
-    WiFi.mode(WIFI_STA);
-    WiFi.begin();
-  }
-  digitalWrite(PIN_LED, LOW);
-
-  unsigned long startedAt = millis();
-
-  Serial.print(F("After waiting "));
-
-  int connRes = WiFi.waitForConnectResult();
-  float waited = (millis() - startedAt);
-
-  Serial.print(waited / 1000); Serial.print(F(" secs , Connection result is ")); Serial.println(connRes);
-
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println(F("Failed to connect"));
-  }
-  else {
-    Serial.print(F("Local IP: "));
-    Serial.println(WiFi.localIP());
-  }
-
-  Serial.printf("Configured Universe ID: %d \n", atoi(p_UniverseID.getValue()));
-  myUniverse = atoi(p_UniverseID.getValue());
 }
 
 void initDMXIn() {
@@ -266,12 +289,6 @@ void initDMXOut() {
     to 0.*/
   dmx_set_mode(dmxOutPort, DMX_MODE_TX);
   dataOut[0] = 0;
-}
-
-void initArtNet() {
-  // This will be called for each packet received
-  artnet.setArtDmxCallback(onArtNetFrame);
-  artnet.begin();
 }
 
 
@@ -330,21 +347,52 @@ void dmxInLoop() {
       /* We can read the DMX data into our buffer and increment our timer. */
       dmx_read_packet(dmxInPort, dataIn, packet.size);
 
-
       // Forward DMX IN to DMX OUT when no ArtNet packets
       if (!artNetIsConnected) {
         dmx_write_packet(dmxOutPort, dataIn, DMX_MAX_PACKET_SIZE);
         dmx_tx_packet(dmxOutPort);
         dmx_wait_tx_done(dmxOutPort, DMX_TX_PACKET_TOUT_TICK);
-        Serial.printf(">> DMX In => Forward: %03d - %03d %03d %03d %03d - %03d %03d %03d %03d \n", dataIn[0], dataIn[1], dataIn[2], dataIn[3], dataIn[4], dataIn[5], dataIn[6], dataIn[7], dataIn[8]);
+        // Serial.printf(">> DMX In => Forward: %03d - %03d %03d %03d %03d - %03d %03d %03d %03d \n", dataIn[0], dataIn[1], dataIn[2], dataIn[3], dataIn[4], dataIn[5], dataIn[6], dataIn[7], dataIn[8]);
       } else {
-        Serial.printf(">> DMX In => Ignored: %03d - %03d %03d %03d %03d - %03d %03d %03d %03d \n", dataIn[0], dataIn[1], dataIn[2], dataIn[3], dataIn[4], dataIn[5], dataIn[6], dataIn[7], dataIn[8]);
+        // Serial.printf(">> DMX In => Ignored: %03d - %03d %03d %03d %03d - %03d %03d %03d %03d \n", dataIn[0], dataIn[1], dataIn[2], dataIn[3], dataIn[4], dataIn[5], dataIn[6], dataIn[7], dataIn[8]);
       }
 
     } else {
       /* Uh-oh! Something went wrong receiving DMX. */
       Serial.println("DMX In Error!");
     }
+  }
+}
+
+
+
+void checkButtons() {
+  static ulong current_millis;
+  current_millis = millis();
+
+  // Check WiFi every WIFICHECK_INTERVAL (10) seconds.
+  if ((current_millis > checkbutton_timeout) || (checkbutton_timeout == 0))
+  {
+    if ((digitalRead(CONFIG_WIFI_PIN) == LOW))
+    {
+      Serial.println(F("\nConfiguration portal requested."));
+      digitalWrite(LED_BUILTIN, HIGH);
+      delay(100);
+      digitalWrite(LED_BUILTIN, LOW);
+      delay(100);
+      digitalWrite(LED_BUILTIN, HIGH);
+      delay(100);
+      digitalWrite(LED_BUILTIN, LOW);
+      delay(100);
+      digitalWrite(LED_BUILTIN, HIGH);
+      delay(100);
+      digitalWrite(LED_BUILTIN, LOW);
+
+      initialConfig = true;
+    }
+
+    // Increment current timeout
+    checkbutton_timeout = current_millis + BUTTONCHECK_INTERVAL;
   }
 }
 
@@ -357,9 +405,42 @@ void artNetCheck() {
   }
 }
 
+void artnetLoop() {
+  // Only perform ArtNet functions when connected to WIFI
+  if ((WiFi.status() == WL_CONNECTED)) {
+    artnet.read();
+    artNetCheck();
+  }
+}
+
+void checkWifiLoop()
+{
+  static ulong current_millis;
+  current_millis = millis();
+
+  // Check WiFi every WIFICHECK_INTERVAL seconds.
+  if ((current_millis > checkwifi_timeout) || (checkwifi_timeout == 0))
+  {
+    if ((WiFi.status() != WL_CONNECTED) || initialConfig) {
+      Serial.println(F("WIFI not connected"));
+    } else {
+      Serial.print(F("WIFI Connected. Local IP: "));
+      Serial.println(WiFi.localIP());
+      /*  Once we are connected to WIFI we must configure OTA update
+        otherwise we will be unable to update firmware, calling initOTA
+        before having a WIFI connection will cause the ESP to crash
+      */
+      initOTA();
+    }
+    checkwifi_timeout = current_millis + WIFICHECK_INTERVAL;
+  }
+}
+
+
 void loop()
 {
-  artnet.read();
-  artNetCheck();
-  dmxInLoop();
+  checkButtons();     // Check if config button pressed
+  dmxInLoop();        // Process incoming DMX
+  checkWifiLoop();    // Ensure WIFI connected
+  artnetLoop();       // Process incoming ArtNet
 }
