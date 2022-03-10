@@ -26,25 +26,27 @@
   along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define DEVICE_NAME               "ConnoDMX"    // Prefix of access point for inital config
-#define WIFI_PASSWORD             "infinite"    // Password for built-in AP during config mode
-#define WIFICHECK_INTERVAL        10000L        // How often to check WIFI connection
-#define OTA_PASSWORD              "infinite"    // Password for OTA firmware updates
-#define BUTTONCHECK_INTERVAL      10000L        // How oftent to check for button press
-#define USE_SPIFFS                true          // Use SPIFFS for WIFI Manager data storage
-#define USE_ESP_WIFIMANAGER_NTP   false         // Recommended to be false for mobile clients
-#define LED_BUILTIN               2             // Status LED to use
-#define DMX_RX_TIMEOUT            50            // Instead of DMX_RX_PACKET_TOUT_TICK
-#define ART_NET_TIMEOUT_MS        5000          // Time in ms to wait for ArtNet packet before declaring disconnect
-#define CONFIG_WIFI_PIN           0             // Use built in button on ESP-Dev
-#define NUM_WIFI_CREDENTIALS      1             // Number of APs to store creds for
+#define DEVICE_NAME               "ConnoDMX"          // Prefix of access point for inital config
+#define WIFI_PASSWORD             "infinite"          // Password for built-in AP during config mode
+#define WIFICHECK_INTERVAL        10000L              // How often to check WIFI connection
+#define OTA_PASSWORD              "infinite"          // Password for OTA firmware updates
+#define BUTTONCHECK_INTERVAL      10000L              // How often to check for button press
+#define USE_ESP_WIFIMANAGER_NTP   false               // Recommended to be false for mobile clients
+#define LED_BUILTIN               2                   // Status LED to use
+#define DMX_RX_TIMEOUT            50                  // Instead of DMX_RX_PACKET_TOUT_TICK
+#define ART_NET_TIMEOUT_MS        5000                // Time in ms to wait for ArtNet packet before declaring disconnect
+#define CONFIG_WIFI_PIN           0                   // Use built in button on ESP-Dev
+#define NUM_WIFI_CREDENTIALS      1                   // Number of APs to store creds for
 
-#include "ArtnetWifi.h"
+#include "nvs_flash.h"
 #include <esp_dmx.h>
 #include <Arduino.h>
 #include <ArduinoOTA.h>
-#include <ESPAsync_WiFiManager.h>
+#include "FS.h"
+#include "ArtnetWifi.h"
 #include <WiFiMulti.h>
+#include <ESPAsync_WiFiManager.h>
+
 
 // Use wifiMulti
 WiFiMulti wifiMulti;
@@ -65,10 +67,11 @@ DNSServer dnsServer;
 #endif
 
 #if ( USING_ESP32_S2 || USING_ESP32_C3 )
-ESPAsync_WiFiManager ESPAsync_wifiManager(&webServer, NULL, DEVICE_NAME);
+    ESPAsync_WiFiManager ESPAsync_wifiManager(&webServer, NULL, DEVICE_NAME);
 #else
-ESPAsync_WiFiManager ESPAsync_wifiManager(&webServer, &dnsServer, DEVICE_NAME);
+    ESPAsync_WiFiManager ESPAsync_wifiManager(&webServer, &dnsServer, DEVICE_NAME);
 #endif
+
 
 WiFiUDP UdpSend;
 ArtnetWifi artnet;
@@ -135,6 +138,8 @@ static ulong checkwifi_timeout    = 0;
 
 void setup()
 {
+  nvs_flash_init();
+  
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(CONFIG_WIFI_PIN, INPUT);
   // set-up serial for debug output
@@ -145,7 +150,6 @@ void setup()
   initDMXIn();                // Setup DMX port to use UART1
   initDMXOut();               // Setup DMX port to use UART2
   initArtNet();               // Setup ART NET
-  initWifiManager();          // Setup WIFI Manager
   connectOrConfigureWifi();   // Connect to WIFI
 }
 
@@ -155,10 +159,17 @@ void initArtNet() {
   artnet.begin();
 }
 
+
 void connectOrConfigureWifi() {
   if (initialConfig) {
     Serial.println(F("Inital Config mode. Starting Portal"));
     digitalWrite(PIN_LED, HIGH);
+    
+    // Add custom configurable ArtNet Universe Number
+    ESPAsync_wifiManager.addParameter(&p_UniverseID);
+
+    // Set timeout on configuration portal
+    ESPAsync_wifiManager.setConfigPortalTimeout(30);
 
     if (!ESPAsync_wifiManager.startConfigPortal(ssid.c_str(), WIFI_PASSWORD)) {
       Serial.println(F("Not connected to WiFi"));
@@ -166,35 +177,28 @@ void connectOrConfigureWifi() {
       Serial.println(F("Wifi connected"));
       String Router_SSID = ESPAsync_wifiManager.WiFi_SSID();
       String Router_Pass = ESPAsync_wifiManager.WiFi_Pass();
-      Serial.println("ESP Self-Stored: SSID = " + Router_SSID + ", Pass = " + Router_Pass);
+      Serial.println("WIFI Manager Self-Stored: SSID = " + Router_SSID + ", Pass = " + Router_Pass);
       wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
     }
-
+    
     /* Get ArtNet Universe ID from the WIFI manager. This is set during
       initial configuration and is retained in EEPROM by the WIFI Manager,
       if for some reason it isn't set it will default to Universe 0
     */
     Serial.printf("Configured Universe ID: %d \n", atoi(p_UniverseID.getValue()));
     myUniverse = atoi(p_UniverseID.getValue());
-
     initialConfig = false;
     digitalWrite(PIN_LED, LOW);
 
+
   } else {
     Serial.println(F("Normal mode. Entering WIFI_STA mode"));
+    String Router_SSID = ESPAsync_wifiManager.WiFi_SSID();
+    String Router_Pass = ESPAsync_wifiManager.WiFi_Pass();
+    Serial.println("WIFI Manager Self-Stored: SSID = " + Router_SSID + ", Pass = " + Router_Pass);
     WiFi.mode(WIFI_STA);
     WiFi.begin();
   }
-
-  unsigned long startedAt = millis();
-
-  Serial.println(F("After waiting to connect waited for"));
-
-  int connRes = WiFi.waitForConnectResult();
-  float waited = (millis() - startedAt);
-
-  Serial.print(waited / 1000); Serial.print(F(" secs , Connection result is "));
-  Serial.println(connRes);
 }
 
 
@@ -238,15 +242,6 @@ void initOTA() {
   Serial.println("OTA Ready");
 
   initOtaComplete = true;
-}
-
-void initWifiManager(void)
-{
-  // Set timeout on configuration portal
-  ESPAsync_wifiManager.setConfigPortalTimeout(30);
-
-  // Add custom configurable ArtNet Universe Number
-  ESPAsync_wifiManager.addParameter(&p_UniverseID);
 }
 
 void initDMXIn() {
@@ -352,9 +347,9 @@ void dmxInLoop() {
         dmx_write_packet(dmxOutPort, dataIn, DMX_MAX_PACKET_SIZE);
         dmx_tx_packet(dmxOutPort);
         dmx_wait_tx_done(dmxOutPort, DMX_TX_PACKET_TOUT_TICK);
-        // Serial.printf(">> DMX In => Forward: %03d - %03d %03d %03d %03d - %03d %03d %03d %03d \n", dataIn[0], dataIn[1], dataIn[2], dataIn[3], dataIn[4], dataIn[5], dataIn[6], dataIn[7], dataIn[8]);
+        Serial.printf(">> DMX In => Forward: %03d - %03d %03d %03d %03d - %03d %03d %03d %03d \n", dataIn[0], dataIn[1], dataIn[2], dataIn[3], dataIn[4], dataIn[5], dataIn[6], dataIn[7], dataIn[8]);
       } else {
-        // Serial.printf(">> DMX In => Ignored: %03d - %03d %03d %03d %03d - %03d %03d %03d %03d \n", dataIn[0], dataIn[1], dataIn[2], dataIn[3], dataIn[4], dataIn[5], dataIn[6], dataIn[7], dataIn[8]);
+        Serial.printf(">> DMX In => Ignored: %03d - %03d %03d %03d %03d - %03d %03d %03d %03d \n", dataIn[0], dataIn[1], dataIn[2], dataIn[3], dataIn[4], dataIn[5], dataIn[6], dataIn[7], dataIn[8]);
       }
 
     } else {
@@ -389,6 +384,7 @@ void checkButtons() {
       digitalWrite(LED_BUILTIN, LOW);
 
       initialConfig = true;
+      connectOrConfigureWifi();
     }
 
     // Increment current timeout
