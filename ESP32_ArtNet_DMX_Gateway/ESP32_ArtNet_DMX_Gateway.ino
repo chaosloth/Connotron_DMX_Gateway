@@ -70,7 +70,8 @@ char LOGO[] PROGMEM = R"(
 WiFiMulti wifiMulti;
 
 // Wifi configuration portal settings
-String ssid = "ConnoDMX_" + String(ESP_getChipId(), HEX);   // Suffix AP name with Chip ID
+String unique_hostname = "ConnoDMX_" + String(ESP_getChipId(), HEX);   // Suffix AP name with Chip ID
+String ssid = unique_hostname;
 String password = "";   // No password
 
 // Status LED, blinks when all is groovy
@@ -229,7 +230,7 @@ void initOTA() {
   if (initOtaComplete) return;
 
   // Hostname defaults to esp3232-[MAC]
-  ArduinoOTA.setHostname(ssid.c_str());
+  ArduinoOTA.setHostname(unique_hostname.c_str());
 
   // Setup authentication for OTA
   ArduinoOTA.setPassword(OTA_PASSWORD);
@@ -280,6 +281,10 @@ void initOTA() {
 
   webServer.on("/studio.png", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send(SPIFFS, "/studio.png","image/png");
+  });
+
+  webServer.onNotFound([](AsyncWebServerRequest *request){
+    request->send(404);
   });
     
   // Configure ElegantOTA with username and password
