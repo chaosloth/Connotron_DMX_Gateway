@@ -56,7 +56,9 @@ The proto board uses off the shelf modules to enable RS485 (DMX) communication b
 
 ## Prototype 2
 
-A second version of the board created use EasyEDA and Fusion 360 for custom board and case design
+A second version of the board created use EasyEDA and Fusion 360 for custom board and case design.
+
+*Note*: ESP module does not have any flash, use version v3
 
 ### Schematic
 
@@ -148,5 +150,20 @@ int enablePin = 21;
 
 dmx_set_pin(dmxPort, transmitPin, receivePin, enablePin);
 ```
+
+## Uploading Firmware
+### Manually
+
+Manual upload to board, using **using esptool v3.2**
+```
+esptool.py --port /dev/cu.usbserial-1110  --before default_reset \
+  --after hard_reset write_flash -z --flash_mode dio \
+  --flash_freq 80m  \
+  0xe000 boot_app0.bin \
+  0x1000 ESP32_ArtNet_DMX_Gateway.ino.bootloader.bin \
+  0x10000 ESP32_ArtNet_DMX_Gateway.ino.bin \
+  0x8000 ESP32_ArtNet_DMX_Gateway.ino.partitions.bin
+  ```
+
 
 
